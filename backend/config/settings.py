@@ -122,6 +122,9 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Custom user: RSA private key stays on the mobile device
 AUTH_USER_MODEL = 'accounts.User'
 
