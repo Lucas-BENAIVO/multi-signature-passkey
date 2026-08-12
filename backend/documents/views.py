@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -10,7 +11,10 @@ from documents.serializers import (
     AssignSignersSerializer,
     DocumentCreateSerializer,
     DocumentSerializer,
+    SignDocumentSerializer,
+    SignatureSerializer,
 )
+from signatures.services import register_signature
 
 
 class DocumentViewSet(viewsets.ModelViewSet):
@@ -19,6 +23,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
     - dépôt (owner)
     - consultation (owner ou signataire affecté)
     - affectation de signataires (owner)
+    - signature RSA (signataire affecté)
     """
 
     permission_classes = (IsAuthenticated,)
@@ -31,7 +36,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
             Document.objects.filter(Q(owner=user) | Q(signers__user=user))
             .distinct()
             .select_related('owner')
-            .prefetch_related('signers__user', 'signatures')
+            .prefetch_related('signers__user', 'signatures__signer')
         )
 
     def get_serializer_class(self):
@@ -65,7 +70,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
         created = []
         for user in users:
-            signer, was_created = DocumentSigner.objects.get_or_create(
+            _signer, was_created = DocumentSigner.objects.get_or_create(
                 document=document,
                 user=user,
                 defaults={'is_required': is_required},
@@ -80,4 +85,34 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 'document': output.data,
             },
             status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=['post'], url_path='sign')
+    def sign(self, request, pk=None):
+        """
+        Reçoit une signature RSA sur l'empreinte SHA-256.
+        La Passkey (step-up) sera exigée côté mobile avant cet appel.
+        """
+        document = self.get_object()
+        serializer = SignDocumentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            signature = register_signature(
+                document=document,
+                signer=request.user,
+                signature_b64=serializer.validated_data['signature_value'],
+                document_sha256=serializer.validated_data.get('document_sha256'),
+            )
+        except DjangoValidationError as exc:
+            messages = exc.messages if hasattr(exc, 'messages') else [str(exc)]
+            return Response({'detail': messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        document.refresh_from_db()
+        return Response(
+            {
+                'signature': SignatureSerializer(signature).data,
+                'document': DocumentSerializer(document, context={'request': request}).data,
+            },
+            status=status.HTTP_201_CREATED,
         )

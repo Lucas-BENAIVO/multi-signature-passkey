@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from documents.models import Document, DocumentSigner
+from signatures.models import Signature
 
 User = get_user_model()
 
@@ -16,9 +17,27 @@ class DocumentSignerSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class SignatureSerializer(serializers.ModelSerializer):
+    signer_username = serializers.CharField(source='signer.username', read_only=True)
+
+    class Meta:
+        model = Signature
+        fields = (
+            'id',
+            'signer',
+            'signer_username',
+            'document_sha256',
+            'is_valid',
+            'matches_current_document_hash',
+            'signed_at',
+        )
+        read_only_fields = fields
+
+
 class DocumentSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(source='owner.username', read_only=True)
     signers = DocumentSignerSerializer(many=True, read_only=True)
+    signatures = SignatureSerializer(many=True, read_only=True)
     signatures_count = serializers.SerializerMethodField()
     valid_signatures_count = serializers.SerializerMethodField()
 
@@ -34,6 +53,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             'sha256',
             'status',
             'signers',
+            'signatures',
             'signatures_count',
             'valid_signatures_count',
             'created_at',
@@ -47,6 +67,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             'sha256',
             'status',
             'signers',
+            'signatures',
             'signatures_count',
             'valid_signatures_count',
             'created_at',
@@ -96,3 +117,14 @@ class AssignSignersSerializer(serializers.Serializer):
             )
         self.context['resolved_users'] = users
         return normalized
+
+
+class SignDocumentSerializer(serializers.Serializer):
+    signature_value = serializers.CharField(
+        help_text='Signature RSA de l’empreinte SHA-256, encodée en Base64.',
+    )
+    document_sha256 = serializers.RegexField(
+        regex=r'^[a-fA-F0-9]{64}$',
+        required=False,
+        help_text='Empreinte signée (optionnel ; sinon empreinte actuelle du document).',
+    )
