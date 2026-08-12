@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-w+hw+uvyk=(%m@=7*4foq5!=#r$g2jd0z@yh2@6i3ci8k=6zp+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # third-party
     'rest_framework',
+    'rest_framework.authtoken',
     # local
     'accounts',
     'documents',
@@ -127,6 +128,16 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # Custom user: RSA private key stays on the mobile device
 AUTH_USER_MODEL = 'accounts.User'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration

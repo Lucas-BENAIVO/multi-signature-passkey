@@ -41,15 +41,17 @@ class Document(models.Model):
 
     def compute_sha256(self) -> str:
         digest = hashlib.sha256()
-        self.file.open('rb')
-        try:
-            for chunk in self.file.chunks():
-                digest.update(chunk)
-        finally:
-            self.file.close()
+        file_field = self.file
+        if hasattr(file_field, 'seek'):
+            file_field.seek(0)
+        for chunk in file_field.chunks():
+            digest.update(chunk)
+        if hasattr(file_field, 'seek'):
+            file_field.seek(0)
         return digest.hexdigest()
 
     def save(self, *args, **kwargs):
+        # Hash before persistence so the upload stream is still readable by storage.
         if self.file and not self.sha256:
             self.sha256 = self.compute_sha256()
         super().save(*args, **kwargs)
